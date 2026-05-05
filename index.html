@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Parking Monitor</title>
+  <meta name="description" content="Real-time octagonal parking space monitor with left and right sensor display." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #05090f;
+      --bg-card: #0d1726;
+      --border: #1a2e4a;
+      --free: #22c55e;
+      --occupied: #ef4444;
+      --nosensor: #1e2d3f;
+      --nosensor-stroke: #2a3f58;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --left-color: #a78bfa;
+      --right-color: #fb923c;
+      --road: #0a1520;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+      background-image:
+        radial-gradient(ellipse at 15% 15%, rgba(167, 139, 250, 0.06) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 85%, rgba(251, 146, 60, 0.06) 0%, transparent 55%);
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 24px;
+      margin-bottom: 28px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-text p {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .connection-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #4ade80;
+      transition: all 0.4s;
+    }
+
+    .connection-pill.offline {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulse-dot 2s infinite;
+    }
+
+    .connection-pill.offline .dot {
+      background: #ef4444;
+      animation: none;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.75);
+      }
+    }
+
+    /* ── Main layout ── */
+    .main {
+      width: 100%;
+      max-width: 860px;
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* ── SVG card ── */
+    .viz-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .viz-card h2 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    svg#parking {
+      width: 100%;
+      max-width: 480px;
+      height: auto;
+    }
+
+    /* slot color transitions */
+    .slot {
+      transition: fill 0.5s ease, filter 0.5s ease;
+      cursor: default;
+    }
+
+    .slot.free {
+      fill: rgba(34, 197, 94, 0.2);
+      stroke: #22c55e;
+    }
+
+    .slot.occupied {
+      fill: rgba(239, 68, 68, 0.25);
+      stroke: #ef4444;
+    }
+
+    .slot.nosensor {
+      fill: var(--nosensor);
+      stroke: var(--nosensor-stroke);
+    }
+
+    .slot.occupied {
+      filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.5));
+    }
+
+    .slot.free {
+      filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.35));
+    }
+
+    .sensor-badge {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      dominant-baseline: middle;
+      text-anchor: middle;
+    }
+
+    /* ── Side panel ── */
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sensor-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .sensor-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .sensor-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .sensor-value {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .sensor-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .sensor-bar-wrap {
+      background: #1a2e4a;
+      border-radius: 4px;
+      height: 4px;
+      overflow: hidden;
+    }
+
+    .sensor-bar {
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.6s ease, background 0.5s;
+    }
+
+    /* ── Legend ── */
+    .legend-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+    }
+
+    .legend-card h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      margin-bottom: 8px;
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1.5px solid;
+      flex-shrink: 0;
+    }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      width: 100%;
+      max-width: 860px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+    }
+
+    .stat-number {
+      font-size: 1.8rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 4px;
+    }
+
+    /* ── Update time ── */
+    .update-time {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    @media (max-width: 640px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-bar {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🅿</div>
+      <div class="logo-text">
+        <h1>Smart Parking Monitor</h1>
+        <p>Octagon Bay · Live Sensor View</p>
+      </div>
+    </div>
+    <div class="connection-pill" id="connPill">
+      <div class="dot"></div>
+      <span id="connLabel">Live</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- Octagon visualization -->
+    <div class="viz-card">
+      <h2>Bird's-Eye View</h2>
+      <svg id="parking" viewBox="0 0 520 520" xmlns="http://www.w3.org/2000/svg"></svg>
+      <p class="update-time" id="updateTime">Waiting for data…</p>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side-panel">
+
+      <!-- Left Sensor -->
+      <div class="sensor-card" id="card-left">
+        <div class="sensor-card-header">
+          <div class="sensor-dot" style="background:var(--left-color)"></div>
+          LEFT SENSOR
+        </div>
+        <div>
+          <div class="sensor-value" id="left-value" style="color:var(--left-color)">—</div>
+          <div class="sensor-label" id="left-label">Loading…</div>
+        </div>
+        <div class="sensor-bar-wrap">
+          <div class="sensor-bar" id="left-bar" style="background:var(--left-color)"></div>
+        </div>
+      </div>
+
+      <!-- Right Sensor -->
+      <div class="sensor-card" id="card-right">
+        <div class="sensor-card-header">
+          <div class="sensor-dot" style="background:var(--right-color)"></div>
+          RIGHT SENSOR
+        </div>
+        <div>
+          <div class="sensor-value" id="right-value" style="color:var(--right-color)">—</div>
+          <div class="sensor-label" id="right-label">Loading…</div>
+        </div>
+        <div class="sensor-bar-wrap">
+          <div class="sensor-bar" id="right-bar" style="background:var(--right-color)"></div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend-card">
+        <h3>Legend</h3>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:rgba(34,197,94,0.2);border-color:#22c55e"></div>
+          Available
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:rgba(239,68,68,0.25);border-color:#ef4444"></div>
+          Occupied
+        </div>
+        <div class="legend-item" style="margin-top:6px">
+          <div class="legend-swatch" style="background:rgba(167,139,250,0.3);border-color:#a78bfa"></div>
+          Left Sensor Zone
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:rgba(251,146,60,0.3);border-color:#fb923c"></div>
+          Right Sensor Zone
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-number" id="stat-total">2</div>
+      <div class="stat-label">Parking Slots</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number" style="color:var(--free)" id="stat-free">—</div>
+      <div class="stat-label">Parking Spot Free</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number" style="color:var(--occupied)" id="stat-occ">—</div>
+      <div class="stat-label">Parking Spot Occupied</div>
+    </div>
+  </div>
+
+  <script>
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const CX = 260, CY = 260, R = 160;
+    const N = 8;
+    const SLOT_DEPTH = 44;
+
+    const LEFT_SIDE = 5;
+    const RIGHT_SIDE = 1;
+
+    function octaVertices() {
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const a = (2 * Math.PI * i / N) - Math.PI / 2 + Math.PI / N;
+        pts.push({ x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) });
+      }
+      return pts;
+    }
+
+    function buildSides(verts) {
+      return verts.map((v1, i) => {
+        const v2 = verts[(i + 1) % N];
+        const dx = v2.x - v1.x, dy = v2.y - v1.y;
+        const len = Math.hypot(dx, dy);
+        return { v1, v2, dx, dy, len, nx: dy / len, ny: -dx / len };
+      });
+    }
+
+    const svg = document.getElementById('parking');
+
+    function el(tag, attrs, parent) {
+      const e = document.createElementNS(SVG_NS, tag);
+      Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+      if (parent) parent.appendChild(e);
+      return e;
+    }
+
+    function makePoly(pts, attrs, parent) {
+      const points = pts.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+      return el('polygon', { points, ...attrs }, parent);
+    }
+
+    function init() {
+      const verts = octaVertices();
+      const sides = buildSides(verts);
+
+      const defs = el('defs', {}, svg);
+
+      function glowFilter(id, color) {
+        const f = el('filter', { id, x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs);
+        el('feGaussianBlur', { stdDeviation: '3', result: 'blur' }, f);
+        const feMerge = el('feMerge', {}, f);
+        el('feMergeNode', { in: 'blur' }, feMerge);
+        el('feMergeNode', { in: 'SourceGraphic' }, feMerge);
+      }
+      glowFilter('glow-free', '#22c55e');
+      glowFilter('glow-occ', '#ef4444');
+
+      el('circle', { cx: CX, cy: CY, r: R + SLOT_DEPTH + 14, fill: '#07111e', opacity: '0.6' }, svg);
+
+      const octPts = verts.map(v => `${v.x.toFixed(2)},${v.y.toFixed(2)}`).join(' ');
+      el('polygon', { points: octPts, fill: '#0c1b2e', stroke: '#1e3a5f', 'stroke-width': '2' }, svg);
+
+      const ct = el('text', {
+        x: CX, y: CY + 6, fill: '#1e3a5f', 'font-size': '52', 'font-weight': '800',
+        'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-family': 'Inter,sans-serif', opacity: '0.5'
+      }, svg);
+      ct.textContent = 'P';
+
+      const slotEls = {};
+
+      sides.forEach((side, si) => {
+        const { v1, dx, dy, len, nx, ny } = side;
+        const ux = dx / len, uy = dy / len;
+
+        const isSensorSide = si === LEFT_SIDE || si === RIGHT_SIDE;
+        const sensorColor = si === LEFT_SIDE ? '#a78bfa' : '#fb923c';
+
+        if (!isSensorSide) return;
+
+        for (let k = 0; k < 2; k++) {
+          const GAP = 4;
+          const t1 = k * (len / 2) + GAP;
+          const t2 = (k + 1) * (len / 2) - GAP;
+
+          const p1 = { x: v1.x + t1 * ux, y: v1.y + t1 * uy };
+          const p2 = { x: v1.x + t2 * ux, y: v1.y + t2 * uy };
+          const p3 = { x: p2.x + SLOT_DEPTH * nx, y: p2.y + SLOT_DEPTH * ny };
+          const p4 = { x: p1.x + SLOT_DEPTH * nx, y: p1.y + SLOT_DEPTH * ny };
+
+          const midT = (t1 + t2) / 2;
+          const lx1 = v1.x + midT * ux, ly1 = v1.y + midT * uy;
+          const lx2 = lx1 + SLOT_DEPTH * nx, ly2 = ly1 + SLOT_DEPTH * ny;
+
+          const poly = makePoly([p1, p2, p3, p4], {
+            class: 'slot nosensor',
+            'stroke-width': '1.5',
+          }, svg);
+
+          el('line', {
+            x1: lx1, y1: ly1, x2: lx2, y2: ly2,
+            stroke: '#1e3a5f', 'stroke-width': '1', opacity: '0.5'
+          }, svg);
+
+          const labelX = (p1.x + p2.x + p3.x + p4.x) / 4;
+          const labelY = (p1.y + p2.y + p3.y + p4.y) / 4;
+
+          // Numbering layout: top-left=1, top-right=2, bottom-left=3, bottom-right=4
+          // LEFT side:  k=1 (top) → 1,  k=0 (bottom) → 3
+          // RIGHT side: k=0 (top) → 2,  k=1 (bottom) → 4
+          const slotNumber = si === LEFT_SIDE
+            ? (k === 1 ? 1 : 3)
+            : (k === 0 ? 2 : 4);
+
+          const numT = el('text', {
+            x: labelX, y: labelY,
+            fill: isSensorSide ? sensorColor : '#2a3f58',
+            'font-size': '9', 'font-weight': '600',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'font-family': 'Inter,sans-serif'
+          }, svg);
+          numT.textContent = slotNumber;
+
+          slotEls[`${si}-${k}`] = poly;
+        }
+
+        // Sensor icon badge
+        if (isSensorSide) {
+          const midX = (v1.x + sides[si].v2.x) / 2;
+          const midY = (v1.y + sides[si].v2.y) / 2;
+          const iconX = midX + (SLOT_DEPTH + 20) * nx;
+          const iconY = midY + (SLOT_DEPTH + 20) * ny;
+
+          el('circle', {
+            cx: iconX, cy: iconY, r: '14',
+            fill: `${sensorColor}22`, stroke: sensorColor, 'stroke-width': '1.5'
+          }, svg);
+
+          for (let w = 1; w <= 2; w++) {
+            el('circle', {
+              cx: iconX, cy: iconY, r: String(5 + w * 4),
+              fill: 'none', stroke: sensorColor, 'stroke-width': '1', opacity: String(0.5 - w * 0.15)
+            }, svg);
+          }
+
+          const labelEl = el('text', {
+            x: iconX, y: iconY - 26,
+            fill: sensorColor,
+            'font-size': '8', 'font-weight': '700',
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'font-family': 'Inter,sans-serif',
+            'letter-spacing': '0.08em'
+          }, svg);
+          labelEl.textContent = si === LEFT_SIDE ? 'L SENSOR' : 'R SENSOR';
+        }
+      });
+
+      return slotEls;
+    }
+
+    const slotEls = init();
+
+    function updateSlots(leftVal, rightVal) {
+      const states = {};
+      for (let s = 0; s < N; s++) {
+        for (let k = 0; k < 2; k++) {
+          const key = `${s}-${k}`;
+          if (s === LEFT_SIDE && k === 1) {
+            // Left TOP slot → active (k=1 is the upper slot on the left side)
+            states[key] = leftVal === '1' ? 'occupied' : 'free';
+          } else if (s === RIGHT_SIDE && k === 0) {
+            // Right TOP slot → active (k=0 is the upper slot on the right side)
+            states[key] = rightVal === '1' ? 'occupied' : 'free';
+          } else {
+            // All others → greyed (no sensor)
+            states[key] = 'nosensor';
+          }
+        }
+      }
+
+      Object.entries(states).forEach(([key, state]) => {
+        const el = slotEls[key];
+        if (!el) return;
+        el.setAttribute('class', `slot ${state}`);
+      });
+
+      const leftOcc = leftVal === '1' ? 1 : 0;
+      const rightOcc = rightVal === '1' ? 1 : 0;
+      const totalOcc = leftOcc + rightOcc;
+      const totalFree = 2 - totalOcc;
+
+      document.getElementById('stat-free').textContent = totalFree;
+      document.getElementById('stat-occ').textContent = totalOcc;
+    }
+
+    function updateSensorCard(side, val) {
+      const occupied = val === '1';
+      const valueEl = document.getElementById(`${side}-value`);
+      const labelEl = document.getElementById(`${side}-label`);
+      const barEl = document.getElementById(`${side}-bar`);
+
+      valueEl.textContent = occupied ? 'OCC' : 'FREE';
+      labelEl.textContent = occupied ? 'Parking spot occupied' : 'Parking spot available';
+      barEl.style.width = occupied ? '100%' : '15%';
+      barEl.style.opacity = occupied ? '1' : '0.5';
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        updateSlots(data.left, data.right);
+        updateSensorCard('left', data.left);
+        updateSensorCard('right', data.right);
+
+        const pill = document.getElementById('connPill');
+        const label = document.getElementById('connLabel');
+        pill.className = 'connection-pill';
+        label.textContent = 'Live';
+
+        const now = new Date();
+        document.getElementById('updateTime').textContent =
+          `Last update: ${now.toLocaleTimeString()}`;
+
+      } catch (e) {
+        const pill = document.getElementById('connPill');
+        const label = document.getElementById('connLabel');
+        pill.className = 'connection-pill offline';
+        label.textContent = 'Offline';
+      }
+    }
+
+    poll();
+    setInterval(poll, 1500);
+  </script>
+</body>
+
+</html>
